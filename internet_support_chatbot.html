@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Home Internet Support Assistant</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.14.0/dist/tabler-icons.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --bg-secondary: #f5f5f4;
+      --bg-tertiary: #f0efe8;
+      --text-primary: #1a1a18;
+      --text-secondary: #6b6b67;
+      --border: rgba(0,0,0,0.12);
+      --border-mid: rgba(0,0,0,0.22);
+      --accent: #185FA5;
+      --accent-light: #E6F1FB;
+      --success: #1D9E75;
+      --danger: #E24B4A;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', monospace;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1c1c1a;
+        --bg-secondary: #252523;
+        --bg-tertiary: #2e2e2b;
+        --text-primary: #e8e8e4;
+        --text-secondary: #8a8a86;
+        --border: rgba(255,255,255,0.1);
+        --border-mid: rgba(255,255,255,0.2);
+        --accent: #378ADD;
+        --accent-light: #0C447C;
+      }
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg-tertiary);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    #app {
+      width: 100%;
+      max-width: 640px;
+      display: flex;
+      flex-direction: column;
+      height: 90vh;
+      max-height: 720px;
+      background: var(--bg);
+      border-radius: var(--radius-lg);
+      border: 0.5px solid var(--border);
+      overflow: hidden;
+    }
+
+    /* Header */
+    #header {
+      padding: 14px 18px;
+      border-bottom: 0.5px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+    #status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #999;
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    #status-dot.online { background: var(--success); }
+    #header-info { flex: 1; }
+    #header-title { font-size: 14px; font-weight: 500; color: var(--text-primary); }
+    #header-sub { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+    .header-icon { font-size: 18px; color: var(--text-secondary); }
+
+    /* API Key Bar */
+    #key-bar {
+      display: flex;
+      gap: 6px;
+      padding: 8px 12px;
+      border-bottom: 0.5px solid var(--border);
+      background: var(--bg-secondary);
+      flex-shrink: 0;
+    }
+    #api-key-input {
+      flex: 1;
+      font-size: 12px;
+      padding: 6px 10px;
+      border: 0.5px solid var(--border-mid);
+      border-radius: var(--radius-md);
+      background: var(--bg);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      outline: none;
+    }
+    #api-key-input:focus { border-color: var(--accent); }
+    #api-key-input:disabled { opacity: 0.5; cursor: default; }
+    #set-key-btn {
+      font-size: 12px;
+      padding: 6px 12px;
+      border: 0.5px solid var(--border-mid);
+      border-radius: var(--radius-md);
+      background: var(--bg);
+      color: var(--text-primary);
+      cursor: pointer;
+      font-family: var(--font);
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    #set-key-btn:hover { background: var(--bg-secondary); }
+    #set-key-btn:disabled { opacity: 0.4; cursor: default; }
+
+    /* Messages area */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #messages::-webkit-scrollbar { width: 4px; }
+    #messages::-webkit-scrollbar-track { background: transparent; }
+    #messages::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 2px; }
+
+    .msg { display: flex; flex-direction: column; gap: 3px; max-width: 84%; }
+    .msg.bot { align-self: flex-start; }
+    .msg.user { align-self: flex-end; }
+
+    .bubble {
+      padding: 9px 13px;
+      border-radius: var(--radius-lg);
+      font-size: 13.5px;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .bot .bubble {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 0.5px solid var(--border);
+      border-bottom-left-radius: 3px;
+    }
+    .user .bubble {
+      background: var(--accent);
+      color: #E6F1FB;
+      border-bottom-right-radius: 3px;
+    }
+
+    .msg-time { font-size: 10px; color: var(--text-secondary); }
+    .msg.user .msg-time { text-align: right; }
+
+    /* Typing indicator */
+    #typing {
+      align-self: flex-start;
+      display: none;
+      gap: 4px;
+      padding: 10px 14px;
+      background: var(--bg-secondary);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      border-bottom-left-radius: 3px;
+    }
+    #typing span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-secondary);
+      animation: bop 1.1s infinite;
+    }
+    #typing span:nth-child(2) { animation-delay: 0.18s; }
+    #typing span:nth-child(3) { animation-delay: 0.36s; }
+    @keyframes bop {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-5px); }
+    }
+
+    /* Quick chips */
+    #chips {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding: 8px 12px;
+      border-top: 0.5px solid var(--border);
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+    .chip {
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 0.5px solid var(--border-mid);
+      background: var(--bg);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-family: var(--font);
+      transition: background 0.15s, color 0.15s;
+    }
+    .chip:hover { background: var(--bg-secondary); color: var(--text-primary); }
+
+    /* Input row */
+    #input-row {
+      padding: 10px 12px;
+      border-top: 0.5px solid var(--border);
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+    #user-input {
+      flex: 1;
+      resize: none;
+      border: 0.5px solid var(--border-mid);
+      border-radius: var(--radius-md);
+      padding: 8px 11px;
+      font-size: 13.5px;
+      font-family: var(--font);
+      line-height: 1.5;
+      max-height: 110px;
+      background: var(--bg);
+      color: var(--text-primary);
+      outline: none;
+    }
+    #user-input:focus { border-color: var(--accent); }
+    #user-input::placeholder { color: var(--text-secondary); }
+
+    #send-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-md);
+      border: 0.5px solid var(--border-mid);
+      background: var(--bg);
+      color: var(--text-primary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    #send-btn:hover { background: var(--bg-secondary); }
+    #send-btn:disabled { opacity: 0.35; cursor: default; }
+    #send-btn i { font-size: 16px; }
+
+    /* Error notice */
+    .err-bubble {
+      background: #FCEBEB;
+      border: 0.5px solid #F09595;
+      color: #791F1F;
+      border-radius: var(--radius-lg);
+      border-bottom-left-radius: 3px;
+      padding: 9px 13px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    @media (prefers-color-scheme: dark) {
+      .err-bubble { background: #501313; border-color: #A32D2D; color: #F7C1C1; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <!-- Header -->
+  <div id="header">
+    <div id="status-dot"></div>
+    <div id="header-info">
+      <div id="header-title"><i class="ti ti-wifi" style="font-size:15px;margin-right:5px;vertical-align:-2px"></i>Home internet support</div>
+      <div id="header-sub">Modem &middot; Router &middot; Mesh &middot; AP &middot; Switch</div>
+    </div>
+    <i class="ti ti-headset header-icon"></i>
+  </div>
+
+  <!-- API Key Bar -->
+  <div id="key-bar">
+    <input id="api-key-input" type="password" placeholder="Enter Gemini API key to start..." autocomplete="off" />
+    <button id="set-key-btn">Set key</button>
+  </div>
+
+  <!-- Messages -->
+  <div id="messages">
+    <div class="msg bot">
+      <div class="bubble">Hi! I'm your home internet support assistant.
+
+Please enter your Gemini API key above, then tell me what's happening with your connection — I'll guide you through it one step at a time.</div>
+      <div class="msg-time" id="init-time"></div>
+    </div>
+    <div id="typing"><span></span><span></span><span></span></div>
+  </div>
+
+  <!-- Quick chips -->
+  <div id="chips">
+    <button class="chip" onclick="chipSend('No internet at all')">No internet</button>
+    <button class="chip" onclick="chipSend('LOS light is blinking red')">LOS blinking red</button>
+    <button class="chip" onclick="chipSend('Wi-Fi is very slow')">Wi-Fi slow</button>
+    <button class="chip" onclick="chipSend('Mesh satellite node is offline')">Mesh node offline</button>
+    <button class="chip" onclick="chipSend('Ethernet port not working')">Ethernet port dead</button>
+  </div>
+
+  <!-- Input -->
+  <div id="input-row">
+    <textarea id="user-input" rows="1" placeholder="Describe your internet issue..."></textarea>
+    <button id="send-btn" disabled aria-label="Send message">
+      <i class="ti ti-arrow-up"></i>
+    </button>
+  </div>
+</div>
+
+<script>
+  // ── Playbook context ──────────────────────────────────────────────────────
+  const PLAYBOOK = `# Home Internet Hardware Support Playbook
+
+## Devices Covered
+1. Modem/ONT  2. Wi-Fi Router  3. Mesh Wi-Fi System  4. Access Point (AP)  5. Network Switch
+
+## 1. Modem / ONT
+LED indicators: Power=Solid Green, PON=Solid Green, LOS=OFF(normal), Internet=Solid/Blinking Green, LAN=Blinking
+Complaints & causes:
+- No internet: fiber issue, ISP outage, power issue
+- Red LOS light: fiber signal loss (cut, loose connector, ISP outage)
+- Intermittent drops: weak optical signal or overheating
+- Slow internet: ISP congestion or damaged fiber
+
+L1 Steps (No Internet):
+1. Confirm power (adapter seated, try different socket)
+2. Check LOS — if blinking red: reseat fiber connector, check sharp bends, ask about recent construction
+3. Reboot: Power OFF → wait 60s → Power ON → wait 3-5min for sync
+4. Direct laptop test: connect laptop directly to ONT. Works=router issue. Fails=ISP/ONT issue.
+
+Escalate if: LOS persists, no power, burnt smell, optical levels unstable, multiple area complaints
+
+## 2. Wi-Fi Router
+Complaints & causes:
+- Wi-Fi connected but no internet: WAN issue
+- Slow Wi-Fi: congestion/interference/placement
+- Frequent disconnects: overheating or firmware issue
+- Cannot see SSID: SSID disabled or router down
+- Router restarting: power/thermal issue
+
+L1 Steps (No Internet):
+1. Check WAN light — if down: check ONT, reseat ethernet cable
+2. Reboot sequence: ONT OFF → Router OFF → ONT ON → wait 2min → Router ON
+3. Multiple devices? If single device: forget/reconnect, disable VPN, restart device
+4. Check placement: avoid microwave, thick walls, metal cabinets. Best: central, elevated, open.
+5. Speed test: wired fast + Wi-Fi slow = wireless issue. Wired slow = ISP/router WAN issue.
+
+L2: Channel congestion (use 1/6/11 for 2.4GHz, shift to 5GHz), firmware upgrade, DHCP exhaustion
+Escalate if: WAN port dead, firmware corruption, persistent packet loss, overheating
+
+## 3. Mesh Wi-Fi System
+Complaints: node offline (weak backhaul), slow satellite (placement), poor roaming, app not detecting node
+L1 Steps (Node Offline):
+1. Check node power and LEDs
+2. Check distance — satellite too far is the most common cause
+3. Re-sync: restart node → open mesh app → re-pair
+4. Temporary close placement test: move satellite near main node. If reconnects = placement/backhaul issue
+
+L2: Check RSSI/backhaul, ethernet backhaul preferred, firmware must match across all nodes
+Escalate if: nodes repeatedly disappear, ethernet backhaul not detected, firmware updates fail
+
+## 4. Access Point (AP)
+Complaints: not broadcasting (PoE/config), no internet via AP (uplink failure), AP disconnecting (switch/PoE)
+L1 Steps:
+1. Check PoE switch/injector power
+2. Reseat ethernet cable, test alternate cable, check switch port LEDs
+3. Verify SSID not hidden, radio not disabled
+4. Connect near AP — if Wi-Fi visible but no internet: uplink/VLAN issue
+
+L2: Channel planning (2.4GHz: channels 1, 6, 11 only), VLAN verification, PoE budget check
+Escalate if: AP inaccessible after reset, PoE hardware failure, multiple AP failures
+
+## 5. Network Switch
+Complaints: no connectivity (power), ports not working (failure/cable), slow wired (duplex mismatch), CCTV offline (PoE), network unstable (broadcast loop)
+L1 Steps:
+1. Check power LED
+2. Check port LEDs — no LED = cable issue or dead port or device off
+3. Swap to different port
+4. Test with known-good cable
+
+L2: Duplex/speed mismatch (set auto-negotiation), broadcast loop (remove duplicate cable, enable STP), PoE budget
+Escalate if: burnt smell, multiple dead ports, switch not powering on, managed switch inaccessible
+
+## Universal L1 Checklist
+Power status, LED status, cable connections, reboot completed, one or multiple devices affected, wired vs wireless comparison, recent changes, ISP outage check, speed test results, overheating
+
+## Ideal Troubleshoot Order
+ISP Signal → ONT/Modem → Router → Switch → AP/Mesh → End Device
+
+## Red Flags (Escalate Immediately)
+Burning smell, sparks, swollen adapters, exposed fiber, electrical shock, repeated reboot loops, multiple area-wide complaints`;
+
+  const SYSTEM_PROMPT = `You are a calm, expert home internet support assistant for L1/L2 troubleshooting.
+
+You help users with: Modem/ONT, Wi-Fi Router, Mesh Wi-Fi, Access Point, and Network Switch issues.
+
+STRICT RULES:
+1. Give ONLY ONE troubleshooting step per response. Never list multiple steps at once.
+2. Be concise, friendly, and jargon-free. Speak like a calm expert.
+3. Always wait for user feedback before moving to the next step.
+4. Track internally how many steps have been tried. After 3-4 failed attempts, recommend scheduling a technician visit.
+5. Never jump to factory reset without prior warning.
+6. Use the playbook below as your only knowledge source.
+
+RESPONSE FORMAT:
+- One observation sentence
+- One clear action for the user
+- One confirmation question
+
+ESCALATION: After 3-4 unsuccessful steps say: "It looks like this may need deeper diagnostics or physical inspection. I'd recommend scheduling a technician visit."
+
+PLAYBOOK:
+${PLAYBOOK}`;
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  let geminiKey = '';
+  let history = [];   // Gemini format: [{role, parts:[{text}]}]
+  let busy = false;
+
+  // ── DOM refs ──────────────────────────────────────────────────────────────
+  const msgsEl    = document.getElementById('messages');
+  const typingEl  = document.getElementById('typing');
+  const inputEl   = document.getElementById('user-input');
+  const sendBtn   = document.getElementById('send-btn');
+  const keyInput  = document.getElementById('api-key-input');
+  const setKeyBtn = document.getElementById('set-key-btn');
+
+  // Set initial timestamp
+  document.getElementById('init-time').textContent = fmtTime();
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function fmtTime() {
+    const n = new Date();
+    return n.getHours().toString().padStart(2,'0') + ':' + n.getMinutes().toString().padStart(2,'0');
+  }
+
+  function scrollBottom() {
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  }
+
+  function addMsg(role, text, isError = false) {
+    const wrap = document.createElement('div');
+    wrap.className = 'msg ' + role;
+
+    const bubble = document.createElement('div');
+    if (isError) {
+      bubble.className = 'err-bubble';
+    } else {
+      bubble.className = 'bubble';
+    }
+    bubble.textContent = text;
+
+    const ts = document.createElement('div');
+    ts.className = 'msg-time';
+    ts.textContent = fmtTime();
+
+    wrap.appendChild(bubble);
+    wrap.appendChild(ts);
+    msgsEl.insertBefore(wrap, typingEl);
+    scrollBottom();
+  }
+
+  function setTyping(on) {
+    typingEl.style.display = on ? 'flex' : 'none';
+    scrollBottom();
+  }
+
+  // ── API Key setup ─────────────────────────────────────────────────────────
+  setKeyBtn.addEventListener('click', () => {
+    const k = keyInput.value.trim();
+    if (!k) {
+      keyInput.style.borderColor = '#E24B4A';
+      return;
+    }
+    geminiKey = k;
+    keyInput.value = '';
+    keyInput.placeholder = 'API key saved';
+    keyInput.disabled = true;
+    setKeyBtn.disabled = true;
+    keyInput.style.borderColor = 'var(--success)';
+    document.getElementById('status-dot').classList.add('online');
+    sendBtn.disabled = false;
+    addMsg('bot', 'API key set! How can I help you today? Please describe your internet issue — or tap one of the quick buttons below.');
+  });
+
+  // ── Send message ──────────────────────────────────────────────────────────
+  async function sendMessage(text) {
+    text = text.trim();
+    if (!text || busy) return;
+    if (!geminiKey) {
+      addMsg('bot', 'Please enter your Gemini API key first.');
+      return;
+    }
+
+    busy = true;
+    sendBtn.disabled = true;
+    addMsg('user', text);
+    history.push({ role: 'user', parts: [{ text }] });
+    setTyping(true);
+
+    try {
+      const payload = {
+        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: history,
+        generationConfig: {
+          maxOutputTokens: 400,
+          temperature: 0.35,
+          topP: 0.9
+        }
+      };
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error?.message || `HTTP ${res.status}`);
+      }
+
+      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!reply) throw new Error('Empty response from Gemini.');
+
+      history.push({ role: 'model', parts: [{ text: reply }] });
+      setTyping(false);
+      addMsg('bot', reply);
+
+    } catch (err) {
+      setTyping(false);
+      addMsg('bot', `Error: ${err.message}\n\nPlease check your API key and try again.`, true);
+      // Remove last user message from history so they can retry
+      history.pop();
+    }
+
+    busy = false;
+    sendBtn.disabled = false;
+    inputEl.focus();
+  }
+
+  function chipSend(text) {
+    if (!geminiKey) {
+      addMsg('bot', 'Please enter your Gemini API key first to start troubleshooting.');
+      return;
+    }
+    inputEl.value = '';
+    sendMessage(text);
+  }
+
+  // ── Input auto-resize + keyboard submit ───────────────────────────────────
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = inputEl.scrollHeight + 'px';
+  });
+
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const v = inputEl.value.trim();
+      if (v) {
+        inputEl.value = '';
+        inputEl.style.height = 'auto';
+        sendMessage(v);
+      }
+    }
+  });
+
+  sendBtn.addEventListener('click', () => {
+    const v = inputEl.value.trim();
+    if (v) {
+      inputEl.value = '';
+      inputEl.style.height = 'auto';
+      sendMessage(v);
+    }
+  });
+</script>
+</body>
+</html>
