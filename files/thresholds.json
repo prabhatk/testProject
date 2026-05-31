@@ -1,0 +1,10 @@
+{
+  "watch_max": 44.2,
+  "proactive_min": 44.3,
+  "reactive_min": 80.9,
+  "description": {
+    "watch": "risk_score < 44.3  \u2192 monitor, no action",
+    "proactive": "44.3 <= risk_score < 80.9 \u2192 schedule reboot",
+    "reactive": "risk_score >= 80.9  \u2192 immediate reboot + alert"
+  }
+}
