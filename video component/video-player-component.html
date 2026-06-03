@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Video Player Component</title>
+
+  <!-- THEO Player SDK -->
+  <script src="https://cdn.myth.theoplayer.com/YOUR_THEO_LICENSE/THEOplayer.js"></script>
+  <link rel="stylesheet" href="https://cdn.myth.theoplayer.com/YOUR_THEO_LICENSE/ui.css" />
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Outfit:wght@300;400;500;600&display=swap');
+
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #111118;
+      --bg-card: #16161f;
+      --bg-hover: #1e1e2a;
+      --bg-active: #1a1a28;
+      --accent: #e8ff47;
+      --accent-dim: rgba(232, 255, 71, 0.12);
+      --accent-glow: rgba(232, 255, 71, 0.25);
+      --text-primary: #f0f0f5;
+      --text-secondary: #8888a0;
+      --text-muted: #55556a;
+      --border: rgba(255,255,255,0.07);
+      --border-active: rgba(232, 255, 71, 0.4);
+      --radius: 10px;
+      --radius-sm: 6px;
+      --duration-tag: #2a2a3a;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: 'Outfit', sans-serif;
+      font-size: 14px;
+      overflow: hidden;
+    }
+
+    /* ── Layout ─────────────────────────────────────────── */
+    .player-shell {
+      display: flex;
+      width: 100%; height: 100vh;
+      background: var(--bg-primary);
+    }
+
+    /* ── Left: Player Panel ──────────────────────────────── */
+    .player-panel {
+      flex: 1 1 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-primary);
+      border-right: 1px solid var(--border);
+      position: relative;
+    }
+
+    .player-header {
+      padding: 18px 24px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .brand-mark {
+      width: 28px; height: 28px;
+      background: var(--accent);
+      border-radius: 6px;
+      display: grid; place-items: center;
+    }
+    .brand-mark svg { width: 14px; height: 14px; }
+
+    .brand-name {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.02em;
+      color: var(--text-primary);
+    }
+    .brand-name span { color: var(--accent); }
+
+    .player-wrapper {
+      flex: 1 1 0;
+      min-height: 0;
+      position: relative;
+      background: #000;
+    }
+
+    /* THEO Player container fills the wrapper */
+    #theo-player-container {
+      width: 100%; height: 100%;
+      position: absolute; inset: 0;
+    }
+
+    /* Theo player needs explicit size */
+    .theoplayer-container { width: 100% !important; height: 100% !important; }
+
+    /* Placeholder when no video is selected */
+    .player-placeholder {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 14px;
+      background: #07070d;
+      z-index: 2;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .player-placeholder.hidden { opacity: 0; }
+
+    .placeholder-icon {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: var(--accent-dim);
+      border: 1.5px solid var(--border-active);
+      display: grid; place-items: center;
+    }
+    .placeholder-icon svg { width: 22px; height: 22px; color: var(--accent); }
+
+    .placeholder-text {
+      font-family: 'Syne', sans-serif;
+      font-size: 15px; font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    /* Video meta bar */
+    .video-meta {
+      padding: 14px 24px 16px;
+      flex-shrink: 0;
+      border-top: 1px solid var(--border);
+      background: var(--bg-secondary);
+      min-height: 68px;
+    }
+    .video-meta-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 15px; font-weight: 700;
+      color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }
+    .video-meta-title.empty { color: var(--text-muted); font-weight: 400; font-family: 'Outfit', sans-serif; font-size: 13px; }
+
+    .video-meta-sub {
+      display: flex; gap: 14px; align-items: center;
+    }
+    .meta-tag {
+      font-size: 11px; font-weight: 500; letter-spacing: 0.06em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .meta-tag.accent { color: var(--accent); }
+
+    /* ── Right: Playlist Panel ───────────────────────────── */
+    .playlist-panel {
+      width: 320px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-secondary);
+      overflow: hidden;
+    }
+
+    .playlist-header {
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .playlist-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 13px; font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .playlist-count {
+      font-family: 'Outfit', sans-serif;
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0;
+      text-transform: none;
+      font-weight: 400;
+    }
+
+    /* Search */
+    .search-bar {
+      margin: 12px 20px 0;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .search-bar input {
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-family: 'Outfit', sans-serif;
+      font-size: 13px;
+      padding: 8px 12px 8px 34px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-bar input::placeholder { color: var(--text-muted); }
+    .search-bar input:focus { border-color: var(--border-active); }
+    .search-bar .search-icon {
+      position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+      color: var(--text-muted); width: 15px; height: 15px; pointer-events: none;
+    }
+
+    /* Playlist scroll area */
+    .playlist-scroll {
+      flex: 1 1 0;
+      overflow-y: auto;
+      padding: 10px 12px 12px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--bg-hover) transparent;
+    }
+    .playlist-scroll::-webkit-scrollbar { width: 4px; }
+    .playlist-scroll::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 4px; }
+
+    /* Playlist items */
+    .playlist-item {
+      display: flex; gap: 10px; align-items: flex-start;
+      padding: 10px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      border: 1px solid transparent;
+      margin-bottom: 4px;
+      position: relative;
+    }
+    .playlist-item:hover { background: var(--bg-hover); }
+    .playlist-item.active {
+      background: var(--bg-active);
+      border-color: var(--border-active);
+    }
+    .playlist-item.active::before {
+      content: '';
+      position: absolute; left: 0; top: 12px; bottom: 12px;
+      width: 3px; background: var(--accent); border-radius: 0 2px 2px 0;
+    }
+
+    .thumb-wrap {
+      position: relative; flex-shrink: 0;
+      width: 88px; height: 52px;
+      border-radius: var(--radius-sm); overflow: hidden;
+      background: var(--bg-card);
+    }
+    .thumb-wrap img {
+      width: 100%; height: 100%; object-fit: cover;
+      display: block;
+    }
+    .thumb-wrap .thumb-placeholder {
+      width: 100%; height: 100%;
+      display: grid; place-items: center;
+      background: var(--bg-card);
+    }
+    .thumb-wrap .thumb-placeholder svg { width: 20px; height: 20px; color: var(--text-muted); }
+
+    .play-badge {
+      position: absolute; inset: 0;
+      display: grid; place-items: center;
+      background: rgba(0,0,0,0.45);
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .play-badge svg { width: 20px; height: 20px; color: #fff; }
+    .playlist-item:hover .play-badge { opacity: 1; }
+    .playlist-item.active .play-badge { opacity: 1; background: rgba(0,0,0,0.3); }
+
+    .duration-badge {
+      position: absolute; bottom: 4px; right: 5px;
+      background: rgba(0,0,0,0.72);
+      color: #fff;
+      font-size: 10px; font-weight: 500;
+      padding: 1px 5px; border-radius: 3px;
+      font-family: 'Outfit', sans-serif;
+      letter-spacing: 0.02em;
+    }
+
+    .item-info { flex: 1; min-width: 0; }
+
+    .item-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 13px; font-weight: 500;
+      color: var(--text-primary);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      margin-bottom: 5px;
+    }
+    .playlist-item.active .item-title { color: var(--accent); }
+
+    .item-meta {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    }
+    .item-meta-tag {
+      font-size: 11px; color: var(--text-muted);
+      display: flex; align-items: center; gap: 3px;
+    }
+    .item-meta-tag svg { width: 10px; height: 10px; }
+
+    /* Loading / Error states */
+    .state-message {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 40px 20px; gap: 12px; text-align: center;
+    }
+    .state-message svg { width: 32px; height: 32px; color: var(--text-muted); }
+    .state-message p { color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+    .state-message small { color: var(--text-muted); font-size: 11px; }
+
+    .spinner {
+      width: 28px; height: 28px;
+      border: 2.5px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .retry-btn {
+      margin-top: 8px;
+      padding: 7px 18px;
+      border-radius: var(--radius-sm);
+      background: var(--accent-dim);
+      border: 1px solid var(--border-active);
+      color: var(--accent);
+      font-family: 'Outfit', sans-serif;
+      font-size: 12px; font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .retry-btn:hover { background: var(--accent-glow); }
+
+    /* Active indicator pulse */
+    .now-playing-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+      animation: pulse-dot 1.4s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.7); }
+    }
+
+    /* ── Responsive: narrow iFrame ───────────────────────── */
+    @media (max-width: 600px) {
+      .player-shell { flex-direction: column; }
+      .playlist-panel { width: 100%; height: 280px; border-right: none; border-top: 1px solid var(--border); }
+      .playlist-header { padding: 12px 16px 10px; }
+      .search-bar { margin: 8px 14px 0; }
+      .playlist-scroll { padding: 8px 10px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="player-shell">
+
+  <!-- ── LEFT: Player ───────────────────── -->
+  <div class="player-panel">
+
+    <div class="player-header">
+      <div class="brand-mark">
+        <svg viewBox="0 0 16 16" fill="currentColor" style="color:#0a0a0f">
+          <polygon points="3,2 13,8 3,14"/>
+        </svg>
+      </div>
+      <span class="brand-name">Stream<span>Hub</span></span>
+    </div>
+
+    <div class="player-wrapper">
+      <div id="theo-player-container"></div>
+
+      <!-- Placeholder shown before any video is selected -->
+      <div class="player-placeholder" id="placeholder">
+        <div class="placeholder-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <polygon points="5,3 19,12 5,21"/>
+          </svg>
+        </div>
+        <span class="placeholder-text">Select a video to play</span>
+      </div>
+    </div>
+
+    <div class="video-meta" id="video-meta">
+      <div class="video-meta-title empty" id="meta-title">No video selected</div>
+      <div class="video-meta-sub">
+        <span class="meta-tag" id="meta-category"></span>
+        <span class="meta-tag" id="meta-duration"></span>
+        <span class="meta-tag accent" id="meta-playing"></span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── RIGHT: Playlist ────────────────── -->
+  <div class="playlist-panel">
+
+    <div class="playlist-header">
+      <div class="playlist-title">
+        <span>Playlist</span>
+        <span class="playlist-count" id="playlist-count"></span>
+      </div>
+    </div>
+
+    <div class="search-bar">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input type="text" id="search-input" placeholder="Search videos…" autocomplete="off" />
+    </div>
+
+    <div class="playlist-scroll" id="playlist-container">
+      <!-- Items rendered by JS -->
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  CONFIGURATION  – edit these values to adapt the component
+// ═══════════════════════════════════════════════════════════
+const CONFIG = {
+  // REST API endpoint that returns the playlist JSON
+  apiUrl: 'https://api.example.com/videos',           // ← replace
+
+  // Optional: static query params appended to every request
+  apiParams: { limit: 50, format: 'json' },
+
+  // Map API fields to the component's internal model.
+  // Change the right-hand strings to match your API shape.
+  fieldMap: {
+    id:          'id',
+    title:       'title',
+    description: 'description',
+    thumbnail:   'thumbnail_url',
+    src:         'stream_url',          // HLS / DASH / MP4 URL
+    type:        'stream_type',         // 'application/x-mpegURL' | 'video/mp4' | etc.
+    duration:    'duration',            // seconds (number) or "HH:MM:SS" string
+    category:    'category',
+    date:        'published_at',
+  },
+
+  // THEO Player license key  (replace YOUR_THEO_LICENSE above and here)
+  theoLicense: 'YOUR_THEO_LICENSE',
+
+  // Auto-play first video on load?
+  autoPlayFirst: false,
+
+  // How often (ms) to re-fetch the playlist. 0 = no polling.
+  pollInterval: 0,
+};
+// ═══════════════════════════════════════════════════════════
+
+
+// ── State ──────────────────────────────────────────────────
+let allVideos   = [];
+let activeIndex = -1;
+let theoPlayer  = null;
+let pollTimer   = null;
+
+// ── DOM refs ───────────────────────────────────────────────
+const $container   = document.getElementById('playlist-container');
+const $search      = document.getElementById('search-input');
+const $count       = document.getElementById('playlist-count');
+const $placeholder = document.getElementById('placeholder');
+const $metaTitle   = document.getElementById('meta-title');
+const $metaCat     = document.getElementById('meta-category');
+const $metaDur     = document.getElementById('meta-duration');
+const $metaPlay    = document.getElementById('meta-playing');
+
+// ── Utility ────────────────────────────────────────────────
+function mapVideo(raw) {
+  const f = CONFIG.fieldMap;
+  return {
+    id:          raw[f.id]          ?? Math.random().toString(36).slice(2),
+    title:       raw[f.title]       ?? 'Untitled',
+    description: raw[f.description] ?? '',
+    thumbnail:   raw[f.thumbnail]   ?? '',
+    src:         raw[f.src]         ?? '',
+    type:        raw[f.type]        ?? 'application/x-mpegURL',
+    duration:    raw[f.duration]    ?? '',
+    category:    raw[f.category]    ?? '',
+    date:        raw[f.date]        ?? '',
+  };
+}
+
+function formatDuration(val) {
+  if (!val) return '';
+  if (typeof val === 'string' && val.includes(':')) return val;
+  const s = parseInt(val, 10);
+  if (isNaN(s)) return '';
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return h > 0
+    ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+    : `${m}:${String(sec).padStart(2,'0')}`;
+}
+
+function buildApiUrl() {
+  const url = new URL(CONFIG.apiUrl, location.href);
+  Object.entries(CONFIG.apiParams).forEach(([k,v]) => url.searchParams.set(k, v));
+  return url.toString();
+}
+
+// ── THEO Player setup ──────────────────────────────────────
+function initPlayer() {
+  if (typeof THEOplayer === 'undefined') {
+    console.warn('[StreamHub] THEOplayer SDK not loaded. Check your license URL.');
+    return;
+  }
+  const el = document.getElementById('theo-player-container');
+  theoPlayer = new THEOplayer.Player(el, {
+    libraryLocation: `https://cdn.myth.theoplayer.com/${CONFIG.theoLicense}/`,
+    license: CONFIG.theoLicense,
+    ui: { fluid: true },
+  });
+}
+
+function playVideo(video) {
+  if (!theoPlayer) { console.warn('Player not ready'); return; }
+  theoPlayer.source = {
+    sources: [{ src: video.src, type: video.type }],
+    poster:  video.thumbnail || undefined,
+    metadata: { title: video.title },
+  };
+  theoPlayer.play();
+
+  // Update placeholder
+  $placeholder.classList.add('hidden');
+
+  // Update meta bar
+  $metaTitle.textContent = video.title;
+  $metaTitle.classList.remove('empty');
+  $metaCat.textContent   = video.category  || '';
+  $metaDur.textContent   = formatDuration(video.duration);
+  $metaPlay.innerHTML    = `<span style="display:flex;align-items:center;gap:5px"><span class="now-playing-dot"></span> Now Playing</span>`;
+}
+
+// ── Playlist rendering ─────────────────────────────────────
+function renderList(videos) {
+  $container.innerHTML = '';
+  if (!videos.length) {
+    $container.innerHTML = `
+      <div class="state-message">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/><path d="M8 15s1.5-2 4-2 4 2 4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
+        </svg>
+        <p>No videos match your search.</p>
+      </div>`;
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  videos.forEach((v, idx) => {
+    const isActive = allVideos.indexOf(v) === activeIndex;
+    const dur = formatDuration(v.duration);
+    const dateStr = v.date ? new Date(v.date).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) : '';
+
+    const item = document.createElement('div');
+    item.className = 'playlist-item' + (isActive ? ' active' : '');
+    item.dataset.globalIndex = allVideos.indexOf(v);
+    item.innerHTML = `
+      <div class="thumb-wrap">
+        ${v.thumbnail
+          ? `<img src="${v.thumbnail}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">`
+          : ''}
+        <div class="thumb-placeholder" ${v.thumbnail ? 'style="display:none"' : ''}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+        </div>
+        <div class="play-badge">
+          ${isActive
+            ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`
+            : `<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>`}
+        </div>
+        ${dur ? `<span class="duration-badge">${dur}</span>` : ''}
+      </div>
+      <div class="item-info">
+        <div class="item-title">${v.title}</div>
+        <div class="item-meta">
+          ${v.category ? `<span class="item-meta-tag">${v.category}</span>` : ''}
+          ${dateStr    ? `<span class="item-meta-tag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            ${dateStr}</span>` : ''}
+        </div>
+      </div>`;
+
+    item.addEventListener('click', () => selectByGlobalIndex(parseInt(item.dataset.globalIndex)));
+    frag.appendChild(item);
+  });
+  $container.appendChild(frag);
+}
+
+function selectByGlobalIndex(idx) {
+  if (idx < 0 || idx >= allVideos.length) return;
+  activeIndex = idx;
+  playVideo(allVideos[idx]);
+  applySearch($search.value);           // re-render to update active state
+}
+
+function applySearch(query) {
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? allVideos.filter(v => v.title.toLowerCase().includes(q) || v.category.toLowerCase().includes(q))
+    : allVideos;
+  renderList(filtered);
+}
+
+// ── API fetch ──────────────────────────────────────────────
+function showLoading() {
+  $container.innerHTML = `
+    <div class="state-message">
+      <div class="spinner"></div>
+      <p>Loading playlist…</p>
+    </div>`;
+}
+
+function showError(msg) {
+  $container.innerHTML = `
+    <div class="state-message">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <p>Failed to load playlist.</p>
+      <small>${msg}</small>
+      <button class="retry-btn" onclick="fetchPlaylist()">Try again</button>
+    </div>`;
+}
+
+async function fetchPlaylist() {
+  showLoading();
+  try {
+    const res = await fetch(buildApiUrl(), {
+      headers: { 'Accept': 'application/json' },
+      // credentials: 'include',   // uncomment if API uses cookies
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+
+    // Support both array responses and {data:[…]} / {items:[…]} wrappers
+    const raw = Array.isArray(json) ? json
+      : (json.data ?? json.items ?? json.videos ?? json.results ?? []);
+
+    allVideos = raw.map(mapVideo);
+    $count.textContent = `${allVideos.length} video${allVideos.length !== 1 ? 's' : ''}`;
+
+    applySearch($search.value);
+
+    if (CONFIG.autoPlayFirst && allVideos.length && activeIndex === -1) {
+      selectByGlobalIndex(0);
+    }
+  } catch (err) {
+    console.error('[StreamHub] Playlist fetch error:', err);
+    showError(err.message);
+  }
+}
+
+// ── Search ─────────────────────────────────────────────────
+$search.addEventListener('input', e => applySearch(e.target.value));
+
+// ── Polling ────────────────────────────────────────────────
+function startPolling() {
+  if (!CONFIG.pollInterval || CONFIG.pollInterval < 5000) return;
+  pollTimer = setInterval(fetchPlaylist, CONFIG.pollInterval);
+}
+
+// ── Keyboard navigation ────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (document.activeElement === $search) return;
+  if (e.key === 'ArrowDown' || e.key === 'j') selectByGlobalIndex(activeIndex + 1);
+  if (e.key === 'ArrowUp'   || e.key === 'k') selectByGlobalIndex(activeIndex - 1);
+});
+
+// ── Boot ───────────────────────────────────────────────────
+initPlayer();
+fetchPlaylist();
+startPolling();
+</script>
+</body>
+</html>
