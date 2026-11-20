@@ -1,0 +1,550 @@
+OTT SUBSCRIBER SEGMENTATION, RETENTION & CONSUMPTION ANALYSIS
+Implementation Plan Version: 1.0 Date: 20 November 2026
+
+====================================================================== 1.
+PROJECT OBJECTIVE
+======================================================================
+
+Build a repeatable, data-driven framework that: 1. Creates meaningful
+subscriber segments using machine learning based on viewing behavior
+during the first 24 hours, first 7 days, and first 30 days after
+subscription start. 2. Measures each segment’s subsequent retention,
+churn, activity, and content consumption over 60-day and 90-day
+observation windows. 3. Compares segment performance by acquisition
+month. 4. Separates first-time (new) subscribers from returning
+subscribers. 5. Accounts for 100% of the in-scope subscriber population,
+including users with no viewing activity, missing data, or insufficient
+history. 6. Produces business-ready tables and dashboard views that
+explain which segments are valuable, which are at risk, and why.
+
+Initial implementation should be run for one acquisition month (January
+as the pilot cohort). The framework should then be reusable for
+February, March, and every subsequent acquisition month without
+rebuilding the logic.
+
+IMPORTANT: The ML model discovers clusters. The team should not force
+exactly 9, 10, or 11 clusters in advance. Test multiple cluster counts
+and select a solution based on statistical quality, stability,
+interpretability, and business usefulness.
+
+======================================================================
+2. SCOPE AND KEY DEFINITIONS TO FREEZE
+======================================================================
+
+Before coding, agree on the following definitions with the business
+team.
+
+A. Subscriber grain - One record per subscriber for the segmentation
+feature table. - Define whether the analysis unit is a person, account,
+subscription, or subscription episode. - If one subscriber can subscribe
+multiple times, preserve subscription episode IDs and history so
+new/returning status is calculated correctly.
+
+B. Acquisition date and month - Acquisition date = agreed subscription
+start date/time. - Acquisition month = calendar month derived from
+subscription start date. - Use one agreed business timezone for all date
+boundaries.
+
+C. Observation windows - First 24 hours: [subscription start,
+subscription start + 24 hours). - First 7 days: [subscription start,
+subscription start + 7 days). - First 30 days: [subscription start,
+subscription start + 30 days). - Day 31-60: follow-up window after the
+initial 30-day segmentation period. - Day 31-90: follow-up window after
+the initial 30-day segmentation period. - Define whether 60D/90D metrics
+mean status on day 60/day 90 or any activity during the respective
+period. Do not mix these definitions.
+
+D. Sports and Entertainment classification - Agree on a canonical
+content taxonomy. - Every viewing event should map to Sports,
+Entertainment, or an explicit Other/Unknown category. - Mixed is a
+subscriber behavior/profile, not a third content category: it means the
+subscriber consumes both Sports and Entertainment.
+
+E. Watch-time and session definitions - Define watch time using a
+consistent event field and unit. - Decide how to handle overlapping
+playback, background playback, duplicate events, very short plays, and
+invalid durations. - Define a session and the inactivity gap that
+separates two sessions.
+
+F. Retention and churn - Define active/retained status from subscription
+entitlement/status data. - Define churn date and treatment of pauses,
+renewals, cancellations, grace periods, and reactivations. - Keep
+subscription retention separate from viewing engagement. A subscriber
+may be subscribed but inactive in viewing.
+
+G. Eligibility and maturity - A cohort is eligible for a 60-day result
+only when 60 days of follow-up data are available. - A cohort is
+eligible for a 90-day result only when 90 days of follow-up data are
+available. - Do not report immature cohorts as if their retention were
+final.
+
+======================================================================
+3. REQUIRED INPUT DATA
+======================================================================
+
+1.  Subscriber / customer table
+    -   subscriber_id
+    -   customer/account identifier, if applicable
+    -   subscription start date/time
+    -   subscription end date/time, if available
+    -   current and historical subscription status
+    -   plan/product details, if relevant
+    -   source/acquisition channel, if available
+2.  Viewing events table
+    -   subscriber_id
+    -   event timestamp
+    -   content ID
+    -   content category / genre
+    -   watch duration
+    -   session ID, if available
+    -   playback/event status
+    -   live/on-demand indicator, if available
+3.  Content metadata table
+    -   content ID
+    -   canonical category: Sports / Entertainment / Other
+    -   sport, tournament, match, movie, series, or genre metadata
+    -   content title and season/competition identifiers, if available
+4.  Subscription history table
+    -   subscriber_id
+    -   subscription episode ID
+    -   start date/time
+    -   end date/time
+    -   status changes
+    -   renewal, cancellation, pause, and reactivation indicators
+5.  Calendar/reference data
+    -   reporting timezone
+    -   acquisition month
+    -   business calendar, if required
+
+======================================================================
+4. PHASE 1 - DATA UNDERSTANDING AND QUALITY
+======================================================================
+
+Tasks: 1. Profile all source tables: row counts, date ranges, distinct
+subscribers, duplicate keys, null rates, and category distributions. 2.
+Validate subscriber IDs across viewing and subscription datasets. 3.
+Validate event timestamps and watch-time units. 4. Identify duplicate,
+negative, zero, and unusually high watch durations. 5. Validate content
+category mapping. 6. Check subscription history for overlapping or
+inconsistent episodes. 7. Quantify users with: - valid viewing data -
+zero viewing activity - missing viewing data - invalid or incomplete
+subscription data 8. Create a data-quality issue table with counts and
+reasons.
+
+Output: - Source data profiling report. - Cleaned Silver-level tables. -
+Data-quality and exception summary.
+
+Acceptance checks: - No unexplained duplicate subscriber/episode
+records. - Watch-time and date rules are documented. - Category mapping
+coverage is measured. - All exclusions have a recorded reason.
+
+======================================================================
+5. PHASE 2 - COHORT AND SUBSCRIBER BASE
+======================================================================
+
+Pilot: - Select January acquisition cohort. - Include all subscribers
+whose agreed subscription start date falls in January. - Keep the cohort
+fixed for all subsequent calculations.
+
+Create a subscriber base table with: - subscriber_id -
+subscription_episode_id - subscription_start_date - acquisition_month -
+new_vs_returning - data_quality_status - 24-hour, 7-day, and 30-day
+observation eligibility - 60-day and 90-day follow-up eligibility
+
+New vs Returning logic: - New: no qualifying earlier subscription
+episode exists before the current subscription start. - Returning: at
+least one qualifying earlier subscription episode exists. - Define the
+lookback period and treatment of trial accounts, family accounts,
+migrations, and reactivations with the business team. - Do not infer
+returning status only from whether the user appears in the current
+month’s data.
+
+Output: - One row per subscriber/subscription episode. - New/returning
+classification with auditable logic.
+
+======================================================================
+6. PHASE 3 - FEATURE ENGINEERING
+======================================================================
+
+Create behavioral features independently for each window: A. First 24
+hours B. First 7 days C. First 30 days
+
+For each window calculate:
+
+Viewing features: - sports_watch_time - entertainment_watch_time -
+other_watch_time - total_watch_time - sports_watch_percentage -
+entertainment_watch_percentage - number_of_sessions - sports_sessions -
+entertainment_sessions - active_days - average_watch_time_per_session -
+average_watch_time_per_active_day - days_since_last_activity within the
+window, where meaningful
+
+Behavioral indicators: - sports_only - entertainment_only -
+mixed_sports_entertainment - no_consumption -
+missing_or_unavailable_data
+
+Suggested calculations: - Sports percentage = sports watch time /
+classified total watch time * 100. - Entertainment percentage =
+entertainment watch time / classified total watch time * 100. - If
+denominator is zero, percentage should be NULL or explicitly marked N/A,
+not silently set to zero. - Keep Other/Unknown watch time visible so
+category percentages can be reconciled and do not falsely imply Sports +
+Entertainment always equals 100%.
+
+Feature engineering rules: - Calculate features relative to each
+subscription episode’s start time. - Prevent events outside the relevant
+window from entering that window. - Avoid future-data leakage:
+segmentation features must use only information available within the
+first 30 days. - Preserve raw totals as well as normalized/percentage
+features. - Treat missing values, true zero activity, and unavailable
+data differently. - Consider log transformation for highly skewed
+watch-time/session features. - Scale numeric features before
+distance-based clustering. - Review correlated and redundant features
+before model training.
+
+Output: - Gold subscriber feature table, one row per analysis unit. -
+Feature dictionary describing formula, unit, window, null handling, and
+source.
+
+======================================================================
+7. PHASE 4 - MACHINE LEARNING SEGMENTATION
+======================================================================
+
+Goal: Discover useful subscriber behavior clusters from the 24-hour,
+7-day, and 30-day features.
+
+Recommended starting algorithms: 1. K-Means: baseline clustering for
+scaled numeric features. 2. Hierarchical clustering: useful for
+understanding segment relationships. 3. Gaussian Mixture Model: optional
+comparison if clusters overlap. 4. DBSCAN/HDBSCAN: optional exploration
+for irregular clusters and outliers, subject to data size and
+implementation constraints.
+
+Recommended process: 1. Define the feature set and remove identifiers
+and outcome/future fields. 2. Separate data-quality/no-consumption cases
+for explicit treatment where appropriate. Do not let nulls accidentally
+form misleading clusters. 3. Impute or encode missing values using
+documented rules. 4. Transform skewed features where appropriate. 5.
+Scale numeric variables. 6. Train multiple candidate models and cluster
+counts. 7. Evaluate using silhouette score and other suitable
+diagnostics, but do not select a model using a metric alone. 8. Profile
+each cluster using original, interpretable feature values. 9. Check
+cluster stability across samples and acquisition months. 10. Review
+clusters with business stakeholders and select useful segments. 11.
+Assign stable segment labels and maintain a model/version record.
+
+Potential segment patterns (examples only; not predefined labels): -
+High Sports / Low Entertainment - Low Sports / High Entertainment - High
+Sports / High Entertainment (Mixed) - Medium Sports / Medium
+Entertainment - Medium Sports / Low Entertainment - Low Sports / Medium
+Entertainment - Low Engagement - High Engagement - No Consumption -
+Missing / Insufficient Data
+
+The final number of ML segments may be 9, 10, 11, or another number
+supported by the data. A separate Null / No Consumption / Insufficient
+Data category may be maintained outside the clustering model when that
+is more accurate.
+
+Output: - Subscriber-to-segment mapping. - Segment profile table. -
+Model evaluation and selection report. - Model parameters, version, and
+reproducibility information.
+
+======================================================================
+8. PHASE 5 - SEGMENT PERFORMANCE MATRIX
+======================================================================
+
+After assigning segments using only the first 30-day behavior, evaluate
+what happens after the segmentation window.
+
+For each segment calculate:
+
+A. Population - subscriber count - percentage of eligible cohort -
+percentage of total cohort - data-quality / excluded count
+
+B. Retention and churn - retained subscribers at day 60 - churned
+subscribers by day 60 - 60-day retention percentage - 60-day churn
+percentage - retained subscribers at day 90 - churned subscribers by day
+90 - 90-day retention percentage - 90-day churn percentage
+
+C. Follow-up consumption For day 31-60 and day 31-90, calculate: -
+Sports watch time and percentage - Entertainment watch time and
+percentage - Other/Unknown watch time and percentage - Total watch
+time - Number of sessions - Active days - Average watch time per active
+day - Sports/Entertainment preference changes, if relevant
+
+Important: - Report subscription retention and viewing activity
+separately. - State whether follow-up consumption is calculated for all
+cohort members, only retained subscribers, or both. Ideally provide both
+views: (1) all eligible cohort members, with zero activity represented
+correctly; (2) retained subscribers only, to profile consumption among
+retained users. - Use the same denominator consistently in each
+metric. - For 60-day and 90-day results, apply cohort maturity rules.
+
+Suggested matrix columns: Acquisition Month | Segment ID | Segment Name
+| Subscriber Count | Cohort Share | Retention 60D | Churn 60D |
+Retention 90D | Churn 90D | Sports Share 60D | Entertainment Share 60D |
+Active Days 60D | Sports Share 90D | Entertainment Share 90D | Active
+Days 90D
+
+Output: - Segment performance matrix. - Segment-level consumption
+profile. - Metric definitions and denominator notes.
+
+======================================================================
+9. PHASE 6 - ACQUISITION COHORT ANALYSIS
+======================================================================
+
+Add acquisition_month as a reporting dimension, derived from
+subscription start date. Do not train a separate model for every month
+by default.
+
+For each acquisition month: - assign subscribers using the approved
+segmentation approach; - calculate segment population and cohort
+share; - calculate 60-day and 90-day retention/churn when mature; -
+calculate follow-up Sports/Entertainment consumption; - compare the same
+segment across acquisition months.
+
+Example: January + High Sports February + High Sports March + High
+Sports
+
+This reveals whether the same behavioral segment performs differently
+across acquisition cohorts.
+
+Model governance: - Decide whether one common model is used across
+months or whether periodic retraining is needed. - If the model is
+retrained, maintain a segment mapping/crosswalk because cluster IDs can
+change between model versions. - Do not compare cluster number “2”
+across model versions unless its meaning has been validated.
+
+Output: - Acquisition month x segment matrix. - Month-over-month cohort
+comparison. - Model version and segment mapping reference.
+
+======================================================================
+10. PHASE 7 - NEW VS RETURNING ANALYSIS
+======================================================================
+
+For each segment, compare: - New subscriber count and share. - Returning
+subscriber count and share. - 60-day retention/churn for each group. -
+90-day retention/churn for each group. - Follow-up Sports/Entertainment
+consumption. - Active days and sessions.
+
+Suggested dimensions: Acquisition Month | New/Returning | Segment |
+Subscriber Count | Retention 60D | Retention 90D | Sports Share |
+Entertainment Share | Active Days
+
+Output: - New vs Returning performance matrix. - Key differences in
+engagement and retention.
+
+======================================================================
+11. PHASE 8 - 100% SUBSCRIBER RECONCILIATION
+======================================================================
+
+This is a mandatory business control.
+
+For every reporting cohort, reconcile the complete in-scope subscriber
+count.
+
+Total in-scope subscribers must equal: - subscribers assigned to valid
+ML segments + zero-consumption subscribers handled separately +
+missing/insufficient-data subscribers + invalid/excluded subscribers
+with documented reasons + any other explicitly approved residual
+category.
+
+Do not count a subscriber twice across mutually exclusive reconciliation
+buckets. If multiple issue flags exist, define a clear bucket priority
+or maintain a separate multi-flag issue table.
+
+Required reconciliation fields: - total_in_scope_subscribers -
+assigned_to_ml_segments - no_consumption -
+missing_or_insufficient_data - invalid_or_excluded -
+other_approved_categories - reconciliation_difference -
+reconciliation_percentage
+
+Checks: - Reconciliation difference must be zero. - Reconciliation
+percentage must be 100%. - Segment counts must sum to the ML-assigned
+population. - Segment + non-segment buckets must sum to the total
+in-scope population. - Every excluded population must have a count and
+reason.
+
+Output: - Cohort reconciliation report. - Exception reason breakdown. -
+Automated validation checks.
+
+======================================================================
+12. PHASE 9 - DASHBOARD AND BUSINESS STORY
+======================================================================
+
+Recommended dashboard pages:
+
+Page 1: Executive Overview - Total subscribers - ML-segmented
+subscribers - No-consumption / missing / excluded subscribers -
+Reconciliation status - 60D and 90D retention for mature cohorts
+
+Page 2: Segment Explorer - Segment size and cohort share - First 24H /
+7D / 30D viewing behavior - Sports vs Entertainment preference -
+Sessions, watch time, and active days
+
+Page 3: Retention and Churn - 60D and 90D retention/churn by segment -
+Segment ranking by retention - High-risk segments - Cohort maturity
+indicator
+
+Page 4: Consumption Analysis - Sports vs Entertainment share - Active
+days and sessions - Follow-up consumption by segment - Content-level
+drill-down: matches, tournaments, movies, series, etc.
+
+Page 5: Acquisition Cohorts - Acquisition month x segment - Month-wise
+retention comparison - Segment mix changes across months
+
+Page 6: New vs Returning - Subscriber mix - Segment distribution -
+Retention and consumption comparison
+
+Page 7: Data Quality and Reconciliation - Total population - Assigned
+and unassigned counts - Missing/null/zero-activity breakdown - Exclusion
+reasons - 100% reconciliation check
+
+Business story should answer: - Which segments are largest? - Which
+segments retain best at 60 and 90 days? - Which segments churn early? -
+What content do retained users consume? - Are January and February
+cohorts behaving differently? - Do new and returning subscribers behave
+differently? - What proportion is not classifiable, and why? - Which
+segments should be targeted for retention, engagement, or acquisition?
+
+======================================================================
+13. PHASE 10 - IMPLEMENTATION IN DATABRICKS
+======================================================================
+
+Suggested architecture: - Bronze: raw subscriber, viewing, content, and
+subscription-history data. - Silver: cleaned, deduplicated,
+standardized, and validated datasets. - Gold: subscriber features,
+segment assignments, performance matrices, cohort outputs, and
+reconciliation tables.
+
+Suggested notebooks/jobs: 01_data_profiling_and_quality
+02_subscriber_cohort_base 03_content_taxonomy_mapping
+04_behavioral_feature_engineering 05_feature_quality_and_validation
+06_ml_clustering_experiments 07_segment_profiling_and_mapping
+08_retention_and_churn_calculation 09_followup_consumption_analysis
+10_acquisition_cohort_analysis 11_new_vs_returning_analysis
+12_subscriber_reconciliation 13_dashboard_tables_and_quality_checks
+
+Technology: - PySpark for scalable transformations and aggregations. -
+Spark ML or an approved Python ML library for clustering. - MLflow for
+experiment tracking and model versioning. - Delta tables for reliable
+intermediate and output datasets. - Databricks Workflows for
+orchestration. - Power BI or the agreed BI tool for reporting.
+
+======================================================================
+14. DELIVERY PLAN AND MILESTONES
+======================================================================
+
+The timeline below is an initial planning estimate. Confirm it after
+profiling the source data and checking data availability.
+
+Milestone 1 - Requirements and data audit - Confirm definitions and
+business rules. - Inspect source schemas and sample records. - Validate
+January cohort availability. - Deliver data dictionary and profiling
+report.
+
+Milestone 2 - Cohort base and feature engineering - Build subscriber
+episode-level base. - Derive acquisition month and new/returning
+status. - Calculate 24H, 7D, and 30D features. - Validate sample
+subscribers manually.
+
+Milestone 3 - ML experiments and segment profiling - Prepare ML-ready
+dataset. - Train and compare clustering models. - Select candidate
+cluster count. - Profile and name business-interpretable segments. -
+Review segment usefulness with stakeholders.
+
+Milestone 4 - Retention and consumption matrices - Calculate 60D and 90D
+outcomes for mature cohorts. - Calculate follow-up consumption and
+active days. - Build segment performance matrix.
+
+Milestone 5 - Cohort, subscriber type, and reconciliation - Add
+acquisition month comparisons. - Add new vs returning comparison. -
+Reconcile 100% of the population. - Resolve or document all residual
+buckets.
+
+Milestone 6 - Dashboard, validation, and handover - Publish
+dashboard-ready Gold tables. - Validate totals and business metrics. -
+Present insights and recommendations. - Document refresh process and
+model governance.
+
+Suggested pilot sequence: - First complete January end-to-end. -
+Validate results with business stakeholders. - Parameterize the pipeline
+by acquisition month. - Run subsequent months using the same approved
+framework.
+
+======================================================================
+15. ACCEPTANCE CRITERIA
+======================================================================
+
+The work is ready for business review when:
+
+1.  Each in-scope subscriber is represented exactly once at the agreed
+    analysis grain.
+2.  24-hour, 7-day, and 30-day features are calculated using correct
+    subscription-relative windows.
+3.  The clustering approach is evaluated and the selected segments are
+    interpretable and stable enough for business use.
+4.  Each subscriber has a segment assignment or an explicit non-segment
+    reason.
+5.  Segment counts and population shares are available.
+6.  60D and 90D retention/churn definitions and denominators are
+    documented.
+7.  Follow-up Sports/Entertainment consumption and active days are
+    available.
+8.  Immature cohorts are clearly marked and not presented as final.
+9.  Acquisition month analysis is available.
+10. New vs Returning logic is auditable and historically correct.
+11. All population buckets reconcile to 100%, with zero unexplained
+    difference.
+12. Dashboard totals match the validated Gold tables.
+13. Model version, feature definitions, and segment mapping are
+    documented.
+
+======================================================================
+16. RISKS AND IMPORTANT GUARDRAILS
+======================================================================
+
+-   Data leakage: Do not use day 31-90 information to create
+    first-30-day segments.
+-   Immature cohorts: Do not calculate final 90-day retention without 90
+    days of follow-up.
+-   Zero vs null: Zero viewing is a real behavior; null may indicate
+    missing or unavailable data. Keep them separate.
+-   Subscription vs engagement: Active subscription does not necessarily
+    mean active viewing.
+-   Cluster drift: Cluster IDs can change after retraining. Maintain
+    model versions and segment crosswalks.
+-   Skewed data: A small group of heavy viewers can distort clustering.
+    Inspect distributions and test transformations/scaling.
+-   Mixed behavior: Calculate Sports and Entertainment shares from a
+    consistent classified watch-time denominator; show Other/Unknown
+    separately.
+-   New/returning: Use historical subscription episodes, not only
+    current-month records.
+-   Double counting: Define the analysis grain and episode logic before
+    aggregation.
+-   Business interpretation: A statistically strong cluster is not
+    automatically a useful business segment. Validate size, stability,
+    distinctiveness, and actionability with stakeholders.
+
+======================================================================
+17. FIRST WORKING SESSION - IMMEDIATE CHECKLIST
+======================================================================
+
+[ ] Confirm the January pilot cohort and its date boundaries. [ ]
+Confirm subscriber vs subscription-episode analysis grain. [ ] Confirm
+retention and churn definitions. [ ] Confirm Sports / Entertainment /
+Other content mapping. [ ] Confirm watch-time, session, and active-day
+definitions. [ ] Check whether 24H, 7D, 30D, 60D, and 90D data are
+available. [ ] Profile subscriber, viewing, and subscription-history
+tables. [ ] Produce a source-to-feature mapping. [ ] Build the January
+subscriber base. [ ] Validate a sample of subscribers manually before
+full processing.
+
+The first tangible output should be a validated January subscriber-level
+feature dataset, not a dashboard or a preselected set of segments. Once
+the features and cohort logic are trusted, proceed to clustering and
+performance analysis.
+
+======================================================================
+END OF PLAN
+======================================================================
